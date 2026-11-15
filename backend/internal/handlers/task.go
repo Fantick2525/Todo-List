@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Fantick2525/Todo-List/backend/internal/database"
@@ -12,7 +14,7 @@ import (
 
 type TaskHandler struct{}
 
-// СОЗДАНИЕ ЗАДАЧИ
+// 1. СОЗДАНИЕ ЗАДАЧИ
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
 	if !ok {
@@ -26,7 +28,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task.UserID = userID // Берем ID из контекста
+	task.UserID = userID
 	if task.Status == "" {
 		task.Status = "active"
 	}
@@ -50,7 +52,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
-// ПОЛУЧЕНИЕ СПИСКА ЗАДАЧ
+// 2. ПОЛУЧЕНИЕ СПИСКА ЗАДАЧ
 func (h *TaskHandler) GetTasks(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
 	if !ok {
@@ -76,4 +78,75 @@ func (h *TaskHandler) GetTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(tasks)
+}
+
+// 3. РЕДАКТИРОВАНИЕ ЗАДАЧИ (НОВОЕ)
+func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "Неавторизованный доступ", http.StatusUnauthorized)
+		return
+	}
+
+	// Достаем ID задачи из URL (например, /tasks/5)
+	idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
+	taskID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID задачи", http.StatusBadRequest)
+		return
+	}
+
+	var task models.Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		return
+	}
+
+	query := `UPDATE tasks SET name=$1, description=$2, priority=$3, deadline=$4 
+	          WHERE id=$5 AND user_id=$6`
+
+	var deadline interface{} = nil
+	if !task.Deadline.IsZero() {
+		deadline = task.Deadline
+	}
+
+	res, err := database.DB.Exec(query, task.Name, task.Description, task.Priority, deadline, taskID, userID)
+	if err != nil {
+		http.Error(w, "Ошибка обновления", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Задача не найдена или нет прав", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Задача обновлена"})
+}
+
+// 4. УДАЛЕНИЕ ЗАДАЧИ (НОВОЕ, Мягкое удаление)
+func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "Неавторизованный доступ", http.StatusUnauthorized)
+		return
+	}
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
+
+	query := `UPDATE tasks SET status='deleted' WHERE id=$1 AND user_id=$2`
+	res, err := database.DB.Exec(query, idStr, userID)
+	if err != nil {
+		http.Error(w, "Ошибка удаления", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Задача не найдена", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Задача удалена"})
 }
