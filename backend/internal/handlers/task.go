@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Fantick2525/Todo-List/backend/internal/database"
@@ -11,13 +13,22 @@ import (
 
 type TaskHandler struct{}
 
-// СОЗДАНИЕ ЗАДАЧи
+// СОЗДАНИЕ ЗАДАЧИ
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var task models.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
+
+	// БЕРЕМ ID ИЗ КОНТЕКСТА (Middleware), а не из JSON!
+	userIDStr := r.Context().Value("userID").(string)
+	userID, _ := strconv.Atoi(userIDStr)
 
 	if task.Status == "" {
 		task.Status = "active"
@@ -32,11 +43,13 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		deadline = task.Deadline
 	}
 
-	err := database.DB.QueryRow(query, task.UserID, task.Name, task.Description, deadline, task.Priority, task.Status, task.DateCreated).Scan(&task.ID)
+	err := database.DB.QueryRow(query, userID, task.Name, task.Description, deadline, task.Priority, task.Status, task.DateCreated).Scan(&task.ID)
 	if err != nil {
 		http.Error(w, "Ошибка сохранения в БД", http.StatusInternalServerError)
 		return
 	}
+
+	task.UserID = userID // Возвращаем в ответе правильный ID
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
@@ -44,10 +57,34 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 // УДАЛЕНИЕ ЗАДАЧИ (Мягкое удаление)
 func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/tasks/"):]
-	_, err := database.DB.Exec("UPDATE tasks SET status='deleted' WHERE id=$1", id)
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Достаем ID задачи из URL (/tasks/123)
+	idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
+	taskID, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID задачи", http.StatusBadRequest)
+		return
+	}
+
+	// Берем ID пользователя из контекста
+	userIDStr := r.Context().Value("userID").(string)
+	userID, _ := strconv.Atoi(userIDStr)
+
+	// Удаляем только если задача принадлежит этому пользователю!
+	query := `UPDATE tasks SET status='deleted' WHERE id=$1 AND user_id=$2`
+	res, err := database.DB.Exec(query, taskID, userID)
 	if err != nil {
 		http.Error(w, "Ошибка удаления", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Задача не найдена или нет прав", http.StatusNotFound)
 		return
 	}
 
