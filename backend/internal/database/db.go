@@ -12,7 +12,6 @@ import (
 var DB *sql.DB
 
 func InitDB() {
-	// Формируем строку подключения из переменных окружения (.env)
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
 
@@ -26,9 +25,24 @@ func InitDB() {
 		log.Fatal("База данных не отвечает:", err)
 	}
 	fmt.Println("Успешно подключились к PostgreSQL!")
-	
-	// Создаем таблицу задач, если ее еще нет
-	query := `
+
+	// 1. Создаем таблицу пользователей
+	queryUsers := `
+	CREATE TABLE IF NOT EXISTS users (
+		id SERIAL PRIMARY KEY,
+		login VARCHAR(50) UNIQUE NOT NULL,
+		email VARCHAR(100) UNIQUE NOT NULL,
+		password VARCHAR(100) NOT NULL,
+		date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
+	_, err = DB.Exec(queryUsers)
+	if err != nil {
+		log.Fatal("Ошибка создания таблицы users:", err)
+	}
+	fmt.Println("Таблица users готова к работе!")
+
+	// 2. Создаем таблицу задач
+	queryTasks := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id SERIAL PRIMARY KEY,
 		user_id INT NOT NULL,
@@ -39,7 +53,7 @@ func InitDB() {
 		status VARCHAR(20) DEFAULT 'active',
 		date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);`
-	_, err = DB.Exec(query)
+	_, err = DB.Exec(queryTasks)
 	if err != nil {
 		log.Fatal("Ошибка создания таблицы tasks:", err)
 	}
