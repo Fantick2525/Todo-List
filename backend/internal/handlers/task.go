@@ -80,7 +80,7 @@ func (h *TaskHandler) GetTasks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tasks)
 }
 
-// 3. РЕДАКТИРОВАНИЕ ЗАДАЧИ (НОВОЕ)
+// 3. РЕДАКТИРОВАНИЕ ЗАДАЧИ
 func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
 	if !ok {
@@ -88,7 +88,6 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Достаем ID задачи из URL (например, /tasks/5)
 	idStr := strings.TrimPrefix(r.URL.Path, "/tasks/")
 	taskID, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -125,7 +124,7 @@ func (h *TaskHandler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Задача обновлена"})
 }
 
-// 4. УДАЛЕНИЕ ЗАДАЧИ (НОВОЕ, Мягкое удаление)
+// 4. УДАЛЕНИЕ ЗАДАЧИ (Мягкое удаление)
 func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
 	if !ok {
@@ -149,4 +148,41 @@ func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Задача удалена"})
+}
+
+// 5. ВОССТАНОВЛЕНИЕ ЗАДАЧИ ИЗ КОРЗИНЫ (НОВОЕ)
+func (h *TaskHandler) RestoreTask(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "Неавторизованный доступ", http.StatusUnauthorized)
+		return
+	}
+
+	// URL будет вида /tasks/5/restore
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) < 4 {
+		http.Error(w, "Неверный URL", http.StatusBadRequest)
+		return
+	}
+
+	taskID, err := strconv.Atoi(pathParts[2])
+	if err != nil {
+		http.Error(w, "Неверный ID задачи", http.StatusBadRequest)
+		return
+	}
+
+	query := `UPDATE tasks SET status='active' WHERE id=$1 AND user_id=$2 AND status='deleted'`
+	res, err := database.DB.Exec(query, taskID, userID)
+	if err != nil {
+		http.Error(w, "Ошибка восстановления", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Задача не найдена в корзине", http.StatusNotFound)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Задача восстановлена"})
 }
