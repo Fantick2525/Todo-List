@@ -1,0 +1,25 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Executables and builds
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+dist/
+build/
+
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
