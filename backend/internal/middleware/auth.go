@@ -1,11 +1,19 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// Ключ, по которому мы будем доставать userID из контекста
+// Использование отдельного типа для ключа — хорошая практика, чтобы избежать коллизий
+type contextKey string
+
+const UserIDKey contextKey = "user_id"
 
 func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -23,7 +31,8 @@ func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 			}
 
 			tokenString := parts[1]
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Парсим токен и явно указываем, что хотим получить RegisteredClaims
+			token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 				return jwtSecret, nil
 			})
 
@@ -32,7 +41,26 @@ func AuthMiddleware(jwtSecret []byte) func(http.Handler) http.Handler {
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			// Достаем claims из токена
+			claims, ok := token.Claims.(*jwt.RegisteredClaims)
+			if !ok {
+				http.Error(w, "Неверные данные в токене", http.StatusUnauthorized)
+				return
+			}
+
+			// В твоем коде при создании токена в Subject записывается ID пользователя
+			// (см. функцию Login в handlers/auth.go)
+			userID, err := strconv.Atoi(claims.Subject)
+			if err != nil {
+				http.Error(w, "Неверный ID пользователя в токене", http.StatusUnauthorized)
+				return
+			}
+
+			// Кладем userID в контекст запроса
+			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+
+			// Передаем запрос дальше с новым контекстом
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
