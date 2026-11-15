@@ -11,7 +11,7 @@ import (
 
 type TaskHandler struct{}
 
-// СОЗДАНИЕ ЗАДАЧИ
+// СОЗДАНИЕ ЗАДАЧи
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var task models.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
