@@ -6,15 +6,18 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Fantick2525/Todo-List/backend/internal/database"
 	"github.com/Fantick2525/Todo-List/backend/internal/handlers"
 	"github.com/Fantick2525/Todo-List/backend/internal/middleware"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Println("Файл .env не найден")
 	}
+
+	database.InitDB()
 
 	jwtKey := []byte(os.Getenv("JWT_SECRET"))
 	port := os.Getenv("PORT")
@@ -29,8 +32,8 @@ func main() {
 	// Публичные маршруты
 	mux.HandleFunc("/register", authHandler.Register)
 	mux.HandleFunc("/login", authHandler.Login)
-	mux.HandleFunc("/forgot-password", authHandler.ForgotPassword)
-	mux.HandleFunc("/reset-password", authHandler.ResetPassword)
+	// mux.HandleFunc("/forgot-password", authHandler.ForgotPassword)
+	// mux.HandleFunc("/reset-password", authHandler.ResetPassword)
 
 	// Приватный тестовый маршрут
 	protectedMux := http.NewServeMux()
