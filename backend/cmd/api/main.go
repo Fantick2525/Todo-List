@@ -14,10 +14,12 @@ import (
 )
 
 func main() {
+	// Загружаем .env файл
 	if err := godotenv.Load(".env"); err != nil {
 		log.Println("Файл .env не найден")
 	}
 
+	// Подключаем Базу Данных
 	database.InitDB()
 
 	jwtKey := []byte(os.Getenv("JWT_SECRET"))
@@ -26,22 +28,27 @@ func main() {
 		port = "8080"
 	}
 
+	// Инициализируем обработчики
 	authHandler := &handlers.AuthHandler{JwtKey: jwtKey}
 	taskHandler := &handlers.TaskHandler{}
 
 	mux := http.NewServeMux()
 
-	// Публичные маршруты
+	// === ПУБЛИЧНЫЕ МАРШРУТЫ (Арсений) ===
 	mux.HandleFunc("/register", authHandler.Register)
 	mux.HandleFunc("/login", authHandler.Login)
+	// mux.HandleFunc("/forgot-password", authHandler.ForgotPassword)
+	// mux.HandleFunc("/reset-password", authHandler.ResetPassword)
 
-	// Защищенные маршруты
+	// === ЗАЩИЩЕННЫЕ МАРШРУТЫ ===
 	protectedMux := http.NewServeMux()
+
+	// Тестовый профиль (Арсений)
 	protectedMux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Это приватный профиль.")
+		fmt.Fprintln(w, "Вы авторизованы!")
 	})
 
-	// === МАРШРУТЫ ДЛЯ ЗАДАЧ ===
+	// Маршруты для ЗАДАЧ (Сергей)
 	protectedMux.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			taskHandler.GetTasks(w, r)
@@ -52,7 +59,6 @@ func main() {
 		}
 	})
 
-	// Маршруты для конкретной задачи
 	protectedMux.HandleFunc("/tasks/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/restore") && r.Method == http.MethodPatch {
 			taskHandler.RestoreTask(w, r)
@@ -65,7 +71,7 @@ func main() {
 		}
 	})
 
-	// Подключаем Middleware
+	// Подключаем Middleware для защиты
 	mux.Handle("/api/", http.StripPrefix("/api", middleware.AuthMiddleware(jwtKey)(protectedMux)))
 
 	fmt.Printf("Сервер запущен на порту %s...\n", port)
