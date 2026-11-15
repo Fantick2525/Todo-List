@@ -26,6 +26,7 @@ func main() {
 	}
 
 	authHandler := &handlers.AuthHandler{JwtKey: jwtKey}
+	taskHandler := &handlers.TaskHandler{}
 
 	mux := http.NewServeMux()
 
@@ -40,6 +41,9 @@ func main() {
 	protectedMux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Вы авторизованы!")
 	})
+
+	protectedMux.HandleFunc("/tasks", taskHandler.CreateTask)
+	protectedMux.HandleFunc("/tasks/", taskHandler.DeleteTask)
 
 	mux.Handle("/api/", http.StripPrefix("/api", middleware.AuthMiddleware(jwtKey)(protectedMux)))
 
