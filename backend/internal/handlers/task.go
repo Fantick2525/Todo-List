@@ -1,5 +1,4 @@
 package handlers
-package handlers
 
 import (
 	"encoding/json"
@@ -15,7 +14,6 @@ type TaskHandler struct{}
 
 // СОЗДАНИЕ ЗАДАЧИ
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
-	// 1. Достаем user_id из контекста (его туда положил Middleware)
 	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
 	if !ok {
 		http.Error(w, "Неавторизованный доступ", http.StatusUnauthorized)
@@ -28,9 +26,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Принудительно ставим user_id из контекста
-	task.UserID = userID
-	
+	task.UserID = userID // Берем ID из контекста
 	if task.Status == "" {
 		task.Status = "active"
 	}
@@ -52,4 +48,32 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
+}
+
+// ПОЛУЧЕНИЕ СПИСКА ЗАДАЧ
+func (h *TaskHandler) GetTasks(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "Неавторизованный доступ", http.StatusUnauthorized)
+		return
+	}
+
+	query := `SELECT id, user_id, name, description, deadline, priority, status, date_created 
+	          FROM tasks WHERE user_id = $1 AND status != 'deleted'`
+
+	rows, err := database.DB.Query(query, userID)
+	if err != nil {
+		http.Error(w, "Ошибка чтения БД", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		var t models.Task
+		rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Description, &t.Deadline, &t.Priority, &t.Status, &t.DateCreated)
+		tasks = append(tasks, t)
+	}
+
+	json.NewEncoder(w).Encode(tasks)
 }
