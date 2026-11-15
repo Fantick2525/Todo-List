@@ -1,4 +1,5 @@
 package handlers
+package handlers
 
 import (
 	"encoding/json"
@@ -6,19 +7,30 @@ import (
 	"time"
 
 	"github.com/Fantick2525/Todo-List/backend/internal/database"
+	"github.com/Fantick2525/Todo-List/backend/internal/middleware"
 	"github.com/Fantick2525/Todo-List/backend/internal/models"
 )
 
 type TaskHandler struct{}
 
-// СОЗДАНИЕ ЗАДАЧи
+// СОЗДАНИЕ ЗАДАЧИ
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
+	// 1. Достаем user_id из контекста (его туда положил Middleware)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "Неавторизованный доступ", http.StatusUnauthorized)
+		return
+	}
+
 	var task models.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
+	// 2. Принудительно ставим user_id из контекста
+	task.UserID = userID
+	
 	if task.Status == "" {
 		task.Status = "active"
 	}
@@ -40,16 +52,4 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
-}
-
-// УДАЛЕНИЕ ЗАДАЧИ (Мягкое удаление)
-func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/tasks/"):]
-	_, err := database.DB.Exec("UPDATE tasks SET status='deleted' WHERE id=$1", id)
-	if err != nil {
-		http.Error(w, "Ошибка удаления", http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]string{"message": "Задача удалена"})
 }
