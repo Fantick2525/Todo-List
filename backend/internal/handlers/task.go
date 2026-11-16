@@ -55,7 +55,7 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
-// УДАЛЕНИЕ ЗАДАЧИ (Мягкое удаление)
+// УДАЛЕНИЕ ЗАДАЧИ
 func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
